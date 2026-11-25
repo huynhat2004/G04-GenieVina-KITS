@@ -71,15 +71,15 @@ Trạng thái mới luôn bắt đầu `PENDING`. Chỉ cho phép `PENDING → P
 
 Trigger tự ghi lịch sử khi **trạng thái thực sự thay đổi**. Tạo đơn PENDING không tạo lịch sử chuyển trạng thái. API đặt `app.member_id` và `app.change_reason` trong transaction (xem README); thiếu người đổi/lý do hoặc dùng VIEWER sẽ khiến UPDATE thất bại. `changed_at` là thời điểm thao tác; riêng seed chỉnh lại mốc này để mô phỏng lịch sử quá khứ. Schema không triển khai JWT hay toàn bộ phân quyền API.
 
-## Quy ước thống kê đề xuất
+## Quy ước thống kê đã triển khai
 
-Các quy ước sau giải quyết chi tiết đề chưa nêu; nhóm cần thống nhất trước khi viết API:
+Các quy ước sau được áp dụng trong `app/metrics.py` để giải quyết chi tiết đề chưa nêu:
 
 - `from`, `to` là ngày, bao gồm cả hai ngày. Truy vấn timestamp bằng khoảng nửa mở `[from 00:00, ngày sau to 00:00)` theo UTC+07. Từ chối `from > to`.
 - Số ngày `D = to - from + 1`. Kỳ trước là `[from - D ngày, from - 1 ngày]`.
 - Khách trả phí: distinct `customer_id` có đơn hiện ở trạng thái PAID và `paid_at` trong kỳ. Khách lần đầu có MIN(paid_at) trên **tất cả đơn hiện PAID trong toàn bộ lịch sử** nằm trong kỳ. Khách thanh toán lại = khách trả phí − khách lần đầu; hai nhóm không trùng nhau, kể cả khách mua nhiều lần trong kỳ đầu tiên.
 - Theo định nghĩa đề, đơn đã REFUNDED không còn là đơn hợp lệ, kể cả khi xem lại kỳ thanh toán cũ. Vì vậy doanh thu/khách lần đầu của kỳ cũ có thể thay đổi sau hoàn tiền. Nếu muốn báo cáo lịch sử bất biến, cần thống nhất lại nghiệp vụ và khai thác lịch sử trạng thái.
-- Đăng ký mới: đếm `signed_up_at` trong kỳ. Tăng trưởng = `(hiện tại − kỳ trước) / kỳ trước × 100`. Nếu kỳ trước = 0, đề xuất trả `null` để biểu thị không xác định.
+- Đăng ký mới: đếm `signed_up_at` trong kỳ. Tăng trưởng = `(hiện tại − kỳ trước) / kỳ trước × 100`. Nếu kỳ trước = 0, trả `null` để biểu thị không xác định.
 - Doanh thu = SUM(amount) của đơn hợp lệ trong kỳ; trung bình ngày = doanh thu / D, tính cả ngày doanh thu 0.
 - Hoàn tiền: đếm đơn và SUM(amount) theo `refunded_at` trong kỳ; không lọc status PAID. Không tự trừ khoản hoàn khỏi doanh thu được định nghĩa trong đề.
 - Doanh thu ngày: tạo đủ D ngày, LEFT JOIN doanh thu theo ngày địa phương, điền 0 nếu không có giao dịch.
@@ -98,3 +98,7 @@ Script không dùng thư viện ngoài. Cùng tham số tạo cùng dữ liệu 
 | SYN-00006 | Có kết quả AI, chưa mua gói |
 
 Các khách còn lại có đăng ký ở kỳ hiện tại/kỳ trước và số đơn khác nhau. Ngày cuối kỳ và mỗi ngày thứ bảy tính từ đầu kỳ không có doanh thu; vẫn có dữ liệu AI tại đầu và cuối kỳ. Lịch sử được sinh qua chính các chuyển trạng thái hợp lệ, không chèn tay. Seed đặt lại sequence sau khi nạp ID để lần tạo dữ liệu tiếp theo không trùng khóa.
+
+## Bảng kỹ thuật xác thực
+
+Ngoài 5 bảng nghiệp vụ, `revoked_tokens(token_hash PK, expires_at)` lưu SHA-256 JWT đã logout. Không lưu token thô; bảng này không có FK đến nghiệp vụ. Mỗi request kiểm tra token chưa bị thu hồi và đọc vai trò hiện tại từ `members`. Database đã cài bản cũ cần chạy `database/migrations/001_revoked_tokens.sql`.

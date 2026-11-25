@@ -1,15 +1,18 @@
-# G04 – Genie Vina KITS
+# Genie Vina – API chỉ số vận hành Connext GNOM
 
-Thiết kế dữ liệu cho REST API chỉ số vận hành Connext GNOM.
+REST API FastAPI + PostgreSQL cho toàn bộ bài tập: khách hàng, đơn hàng, lịch sử trạng thái, kết quả AI, xác thực JWT và bốn chỉ số vận hành. Có 16 thao tác HTTP, Swagger, dữ liệu giả, unit test và kiểm thử tích hợp PostgreSQL.
 
-- [ERD, ràng buộc và quy ước chỉ số](docs/erd.md)
-- [Schema PostgreSQL](database/schema.sql)
-- [Script sinh dữ liệu giả](scripts/generate_seed.py)
-- [Phần A: hợp đồng API khách hàng và bàn giao](docs/customer-api.md)
+- [ERD, PK/FK và quyết định thiết kế](docs/erd.md)
+- [Đặc tả API và ví dụ](docs/api.md)
+- [Đối chiếu yêu cầu và kiểm chứng](docs/acceptance.md)
+- [Quy trình Git và phân công](docs/git-workflow.md)
+- [Kịch bản demo và thuyết trình](docs/presentation.md)
+- [PowerPoint](docs/Genie-Vina.pptx)
+- [OpenAPI toàn hệ thống](API/openapi.json)
 
-## Chạy API khách hàng (phần A)
+## Cài đặt và chạy
 
-Backend dùng FastAPI + PostgreSQL, Python 3.10+. Từ thư mục gốc:
+Python 3.10+, PostgreSQL 14+. Chạy từ thư mục gốc:
 
 ```sh
 python3 -m venv .venv
@@ -19,99 +22,88 @@ cp .env.example .env
 python -c 'import secrets; print(secrets.token_urlsafe(48))'
 ```
 
-Điền kết quả sinh ngẫu nhiên vào `JWT_SECRET` trong `.env`; đặt `DATABASE_URL` trỏ tới database PostgreSQL của bạn. Sau đó nạp schema và seed theo hướng dẫn bên dưới, rồi khởi động:
+Điền chuỗi ngẫu nhiên vào `JWT_SECRET` trong `.env`; đặt `DATABASE_URL` trỏ tới database riêng đã tạo. Không commit `.env`.
+
+Nếu dùng Docker, có thể khởi động PostgreSQL local bằng:
 
 ```sh
+docker compose up -d --wait
+```
+
+Đặt `DATABASE_URL=postgresql://postgres:local-demo-only@localhost:54329/genie_vina` khi dùng compose được cung cấp. Nạp schema và dữ liệu một lần vào database rỗng:
+
+```sh
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/schema.sql
+python scripts/generate_seed.py --output database/seed.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/seed.sql
 uvicorn app.main:app --reload --env-file .env
 ```
 
+Các lệnh `psql` cần `DATABASE_URL` đã được export trong shell; file `.env` chỉ được uvicorn tự nạp khi có `--env-file`. Nếu không có `psql` local, nạp vào compose bằng:
+
+```sh
+docker compose exec -T db psql -U postgres -d genie_vina -v ON_ERROR_STOP=1 < database/schema.sql
+python scripts/generate_seed.py --output database/seed.sql
+docker compose exec -T db psql -U postgres -d genie_vina -v ON_ERROR_STOP=1 < database/seed.sql
+```
+
+Database đã có schema bản trước chỉ cần chạy `database/migrations/001_revoked_tokens.sql`; không chạy lại schema/seed. Không tự động sửa database khi app khởi động.
+
 Swagger: http://127.0.0.1:8000/docs. OpenAPI JSON: http://127.0.0.1:8000/openapi.json.
 
-Trong khi thành viên D chưa tích hợp API đăng nhập, tạo JWT thử nghiệm bằng CLI local (không phải endpoint phát token):
+Đăng nhập tại `POST /api/auth/login`:
 
-```sh
-python scripts/create_demo_token.py --member-id 1
+```json
+{"email":"admin@example.invalid","password":"DemoOnly!2026"}
 ```
 
-ID mẫu: `1` ADMIN, `2` OPERATOR, `3` VIEWER. Copy token vào nút **Authorize** của Swagger. Token thử nghiệm hết hạn sau 30 phút. API xác minh chữ ký HS256, `sub`, `exp`, kiểm tra thành viên tồn tại và đọc quyền hiện tại từ database. Đăng nhập/logout và danh sách token đã thu hồi thuộc phần D, chưa triển khai trong phần A; điểm tích hợp là `app/auth.py:get_principal`.
+Copy `data.accessToken` vào **Authorize** trên Swagger. Token hết hạn sau 30 phút. Tài khoản khác: `operator@example.invalid`, `viewer@example.invalid`, cùng mật khẩu thử nghiệm trên. ADMIN toàn quyền; OPERATOR tạo/sửa dữ liệu, đổi trạng thái; VIEWER chỉ đọc/thống kê. Logout thu hồi token hiện tại, có hiệu lực cả khi restart ứng dụng.
 
-Ví dụ gọi API sau khi thay `YOUR_TOKEN` bằng JWT:
+## Kiểm thử
 
-```sh
-curl 'http://127.0.0.1:8000/api/customers?page=1&size=20&country=VN' \
-  -H 'Authorization: Bearer YOUR_TOKEN'
-
-curl -X POST http://127.0.0.1:8000/api/customers \
-  -H 'Authorization: Bearer YOUR_TOKEN' \
-  -H 'Content-Type: application/json' \
-  -d '{"customerCode":"DEMO-001","name":"Khách giả lập","country":"VN","signupMethod":"EMAIL","signedUpAt":"2026-11-24T09:00:00+07:00"}'
-```
-
-## Kiểm thử API
-
-Chạy riêng unit test, không cần PostgreSQL hoặc biến môi trường:
+Không cần PostgreSQL:
 
 ```sh
-python -m pytest tests/unit -q
+python -m pytest tests/unit tests/test_seed.py -q
 ```
 
-Unit test kiểm tra validation model khách hàng, PATCH một phần, JWT/chữ ký/thuật toán/thời hạn, ma trận quyền, cấu hình bắt buộc và xử lý lỗi không lộ thông tin nội bộ. Fixture trong `tests/unit/conftest.py` chặn mọi kết nối database ngoài ý muốn.
-
-Chạy toàn bộ test, gồm kiểm thử HTTP trên PostgreSQL:
+Kiểm thử toàn bộ trên database thử nghiệm riêng:
 
 ```sh
-TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/genie_vina_test python -m pytest -q
+TEST_DATABASE_URL=postgresql://postgres:local-demo-only@localhost:54329/genie_vina python -m pytest -q
 ```
 
-Database kiểm thử phải tồn tại và tài khoản phải có quyền tạo schema. Bộ test tự tạo schema tên ngẫu nhiên, nạp schema/seed rồi xóa riêng schema đó khi kết thúc; không xóa bảng ở schema mặc định. Không có `TEST_DATABASE_URL` thì test HTTP được đánh dấu skipped, vẫn chạy unit test và test dữ liệu giả. Test HTTP kiểm tra CRUD, lưu dữ liệu thật, phân trang, bộ lọc, JWT, quyền, lỗi đầu vào, transaction rollback, ràng buộc ngày/FK, tạo trùng đồng thời và Swagger.
+Test tạo schema ngẫu nhiên và tự xóa riêng schema đó; không xóa bảng nghiệp vụ ở schema mặc định. Nếu không có `TEST_DATABASE_URL`, test HTTP bị skipped. Kiểm tra ràng buộc/trigger bằng SQL (dữ liệu thử được rollback):
 
-Cấu trúc backend:
+```sh
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/verify_database.sql
+```
+
+## Dữ liệu và quy ước
+
+Mặc định script tạo 60 khách, 3 thành viên đủ vai trò, dữ liệu trong 30 ngày 26/10–24/11/2026 và giao dịch trước kỳ để kiểm tra mua lại. Tên tổng hợp, email miền `.invalid`, không dùng thông tin cá nhân thật. Cấu hình tối thiểu 50 khách và 30 ngày; random seed mặc định `42`, kết quả tái lập được.
+
+```sh
+python scripts/generate_seed.py --customers 100 --days 60 --end-date 2026-11-24 --seed 123 --output /tmp/genie-seed.sql
+```
+
+Seed chạy trong một transaction và từ chối khi bảng nghiệp vụ đã có dữ liệu. Mật khẩu PBKDF2-HMAC-SHA256, 600.000 vòng; tài khoản mẫu chỉ dành cho demo.
+
+Thống kê nhận `from`, `to` dạng `YYYY-MM-DD`, bao gồm hai ngày theo `Asia/Ho_Chi_Minh`. Đơn hiện PAID mới hợp lệ. Hoàn tiền tính riêng theo refundedAt. Tiền và tỷ lệ trả dưới dạng chuỗi thập phân chính xác; tăng trưởng trả null nếu kỳ trước bằng 0. Chi tiết công thức trong [ERD](docs/erd.md).
+
+## Cấu trúc
 
 ```text
 app/
-  main.py        # FastAPI, định dạng lỗi chung, OpenAPI
-  config.py      # Biến môi trường bắt buộc
-  db.py          # Kết nối và transaction theo request
-  auth.py        # Xác minh JWT, phân quyền; tích hợp phần D tại đây
-  models.py      # Request/response, kiểm tra đầu vào
-  customers.py   # 5 endpoint CRUD khách hàng
+  main.py         # Router, Swagger, lỗi thống nhất
+  config.py       # DATABASE_URL, JWT_SECRET bắt buộc
+  db.py           # Kết nối, transaction theo request
+  auth.py         # JWT, token bị thu hồi, phân quyền
+  sessions.py     # Đăng nhập, đăng xuất
+  models.py       # Model khách hàng và response chung
+  customers.py    # CRUD khách hàng
+  operations.py   # Đơn hàng, trạng thái, lịch sử, AI
+  metrics.py      # Công thức, API summary/daily
 ```
 
-## Chạy dữ liệu mẫu
-
-Yêu cầu PostgreSQL 14+ và Python 3.10+. Tạo database rỗng, chạy từ thư mục gốc:
-
-```sh
-psql -d genie_vina -v ON_ERROR_STOP=1 -f database/schema.sql
-python3 scripts/generate_seed.py --output database/seed.sql
-psql -d genie_vina -v ON_ERROR_STOP=1 -f database/seed.sql
-```
-
-Mặc định: 60 khách hàng, kỳ dữ liệu 30 ngày từ 2026-10-26 đến hết 2026-11-24, random seed `42`. Có thêm khách đăng ký và thanh toán trước kỳ để kiểm tra mua lại và so sánh kỳ trước. Tên và email đều là dữ liệu tổng hợp; email dùng miền `.invalid`.
-
-```sh
-python3 scripts/generate_seed.py --customers 100 --days 60 --end-date 2026-11-24 --seed 123 --output /tmp/genie-seed.sql
-python3 -m unittest discover -s tests -v
-```
-
-Sau khi nạp seed mặc định, kiểm tra trực tiếp các ràng buộc và trigger (dữ liệu thử được rollback):
-
-```sh
-psql -d genie_vina -v ON_ERROR_STOP=1 -f tests/verify_database.sql
-```
-
-Script chỉ xuất SQL, không kết nối database. Seed chạy trong một transaction, từ chối chạy nếu bất kỳ bảng nghiệp vụ nào đã có dữ liệu và không xóa dữ liệu cũ. `database/seed.sql` là file sinh tự động, không cần commit.
-
-Tài khoản mẫu: `admin@example.invalid`, `operator@example.invalid`, `viewer@example.invalid`; mật khẩu `DemoOnly!2026`. Hash dùng định dạng `pbkdf2_sha256$600000$salt$base64digest` (PBKDF2-HMAC-SHA256, tương thích định dạng Django). Backend cần hỗ trợ định dạng này hoặc đổi hàm tạo hash theo encoder của framework trước khi nạp seed. Chỉ dùng các tài khoản này cho thử nghiệm.
-
-Khi đổi trạng thái đơn, đặt người thao tác và lý do trong cùng transaction/kết nối để trigger tự ghi lịch sử:
-
-```sql
-BEGIN;
-SET LOCAL app.member_id = '2';
-SET LOCAL app.change_reason = 'Đã xác nhận thanh toán';
-UPDATE orders SET status = 'PAID', paid_at = CURRENT_TIMESTAMP WHERE id = 1;
-COMMIT;
-```
-
-API vẫn phải kiểm tra JWT và quyền; session setting trong database chỉ ghi nhận người thao tác, không thay thế xác thực.
+`API/openapi.json` và `API/orders.yaml` được sinh từ ứng dụng bằng `python scripts/export_openapi.py`; tránh sửa riêng hợp đồng làm lệch runtime. Tạo lại PPT bằng `python scripts/build_presentation.py`. Các thư viện hỗ trợ bàn giao nằm trong `requirements-tools.txt`.
