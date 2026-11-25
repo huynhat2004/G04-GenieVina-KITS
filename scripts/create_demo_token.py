@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local CLI helper only; member login/logout belongs to member D."""
+"""Local CLI helper for seeded members; real login/logout is in app/sessions.py."""
 import argparse
 import os
 from datetime import datetime, timedelta, timezone
