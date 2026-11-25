@@ -5,6 +5,7 @@ Thiết kế dữ liệu cho REST API chỉ số vận hành Connext GNOM.
 - [ERD, ràng buộc và quy ước chỉ số](docs/erd.md)
 - [Schema PostgreSQL](database/schema.sql)
 - [Script sinh dữ liệu giả](scripts/generate_seed.py)
+- [API thống kê (phần C)](docs/metrics-api.md)
 
 ## Chạy dữ liệu mẫu
 
