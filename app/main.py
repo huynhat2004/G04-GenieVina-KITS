@@ -9,6 +9,7 @@ from starlette.exceptions import HTTPException
 
 from app.config import get_settings
 from app.customers import router
+from app.metrics_api import router as metrics_router
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title='Genie Vina – Customer API', version='1.0.0', lifespan=lifespan,
               description='Phần A: CRUD khách hàng. Bearer JWT; ADMIN / OPERATOR / VIEWER.')
 app.include_router(router)
+app.include_router(metrics_router)
 
 
 def error(status, message, data=None, headers=None):
@@ -68,7 +70,7 @@ original_openapi = app.openapi
 def customer_openapi():
     schema = original_openapi()
     for path, operations in schema['paths'].items():
-        if path.startswith('/api/customers'):
+        if path.startswith(('/api/customers', '/api/metrics')):
             for operation in operations.values():
                 if isinstance(operation, dict):
                     operation.get('responses', {}).pop('422', None)
