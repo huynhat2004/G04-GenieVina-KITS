@@ -1,3 +1,7 @@
 __pycache__/
 *.py[cod]
 database/seed.sql
+.venv/
+.env
+.pytest_cache/
+.coverage

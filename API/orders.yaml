@@ -1,0 +1,809 @@
+
+openapi: 3.0.3
+
+info:
+  title: Orders API
+  version: 1.0.0
+  description: API quản lý đơn hàng, trạng thái và lịch sử thay đổi
+
+servers:
+  - url: http://localhost:3000
+    description: Development server
+
+tags:
+  - name: Orders
+    description: Quản lý đơn hàng
+  - name: Order Status
+    description: Quản lý trạng thái và lịch sử đơn hàng
+  - name: AI Results
+    description: Ghi nhận, tra cứu kết quả AI
+
+security:
+  - BearerAuth: []
+
+paths:
+
+  # ==========================================
+  # 1. Tạo đơn hàng
+  # ==========================================
+  /api/orders:
+    post:
+      tags:
+        - Orders
+      summary: Tạo đơn hàng
+      description: Tạo đơn hàng mới với trạng thái mặc định PENDING.
+      operationId: createOrder
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+            example:
+              customerId: 1
+              packageName: Basic
+              amount: 500000
+      responses:
+        '201':
+          description: Tạo đơn hàng thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+              example:
+                status: 201
+                message: success
+                data:
+                  id: 101
+                  customerId: 1
+                  packageName: Basic
+                  amount: 500000
+                  refund: 0
+                  status: PENDING
+                  paidAt: null
+                  refundedAt: null
+                  createdAt: "2026-11-24T08:00:00Z"
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Không tìm thấy khách hàng
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: 404
+                message: Customer not found
+                data: null
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+          
+  # ==========================================
+  # 2. Lấy danh sách đơn hàng
+  # ==========================================
+    get:
+      tags:
+        - Orders
+      summary: Lấy danh sách đơn hàng
+      description: Lấy danh sách đơn hàng có hỗ trợ phân trang, lọc và sắp xếp.
+      operationId: getOrders
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/OrderStatusFilter'
+        - $ref: '#/components/parameters/CustomerIdFilter'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/SortBy'
+        - $ref: '#/components/parameters/SortOrder'
+      responses:
+        '200':
+          description: Lấy danh sách đơn hàng thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # ==========================================
+  # 3. Lấy chi tiết đơn hàng
+  # ==========================================
+  /api/orders/{id}:
+    get:
+      tags:
+        - Orders
+      summary: Lấy chi tiết đơn hàng
+      operationId: getOrderById
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Lấy chi tiết đơn hàng thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Không tìm thấy đơn hàng
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: 404
+                message: Order not found
+                data: null
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # ==========================================
+  # 4: Cập nhật trạng thái đơn hàng
+  # ==========================================
+  /api/orders/{id}/status:
+    patch:
+      tags:
+        - Order Status
+      summary: Cập nhật trạng thái đơn hàng
+      description: |
+        Cập nhật trạng thái đơn hàng.
+        Backend tự lấy previousStatus, changedBy và changedAt.
+        Đồng thời ghi lịch sử vào order_status_histories.
+
+        Luồng chuyển trạng thái đề xuất:
+        PENDING -> PAID,
+        PENDING -> FAILED,
+        PAID -> REFUNDED
+
+        Các luồng chuyển trạng thái khác sẽ bị từ chối.
+      operationId: updateOrderStatus
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrderStatusRequest'
+            example:
+              newStatus: PAID
+              reason: Payment confirmed
+      responses:
+        '200':
+          description: Cập nhật trạng thái thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderStatusUpdateResponse'
+              example:
+                status: 200
+                message: success
+                data:
+                  id: 101
+                  previousStatus: PENDING
+                  newStatus: PAID
+                  changedBy: 5
+                  reason: Payment confirmed
+                  changedAt: "2026-11-24T09:00:00Z"
+        '400':
+          description: Validation failed hoặc chuyển trạng thái không hợp lệ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                validationError:
+                  value:
+                    status: 400
+                    message: Validation failed
+                    data:
+                      newStatus: Invalid status
+                invalidTransition:
+                  value:
+                    status: 400
+                    message: Invalid status transition
+                    data:
+                      from: FAILED
+                      to: PAID
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Không tìm thấy đơn hàng
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: 404
+                message: Order not found
+                data: null
+        '409':
+          description: Xung đột khi cập nhật trạng thái
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: 409
+                message: Order status has been changed by another request
+                data: null
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # ==========================================
+  # 5. Lấy lịch sử thay đổi trạng thái đơn hàng
+  # ==========================================
+  /api/orders/{id}/status-history:
+    get:
+      tags:
+        - Order Status
+      summary: Lấy lịch sử thay đổi trạng thái đơn hàng
+      operationId: getOrderStatusHistory
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Lấy lịch sử thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderStatusHistoryListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Không tìm thấy đơn hàng
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+                example:
+                  status: 404
+                  message: Order not found
+                  data: null
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # ==========================================
+  # 6. Ghi nhận kết quả AI
+  # ==========================================
+  /api/ai-results:
+    post:
+      tags:
+        - AI Results
+      summary: Ghi nhận kết quả AI
+      operationId: postAiResults
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AiResults'
+            example:
+              id: 1
+              customerId: 1
+              type: QUOTE
+              createdAt: 2026-11-24T09:00:00Z
+      responses: 
+        '201':
+          description: Ghi nhận kết quả AI thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiResults'
+              example:
+                status: 201
+                message: success
+                data:
+                  id: 1
+                  customerId: 1
+                  type: QUOTE
+                  createdAt: 2026-11-24T09:00:00Z
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Không tìm thấy khách hàng
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: 404
+                message: Customer not found
+                data: null
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  # ==========================================
+  # 7. Tra cứu kết quả AI
+  # ==========================================
+    get:
+      tags:
+        - AI Results
+      summary: Tra cứu kết quả AI
+      operationId: getAiResults
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/AiResultsTypeFilter'
+        - $ref: '#/components/parameters/CustomerIdFilter'
+        - $ref: '#/components/parameters/AiResultsSortBy'
+        - $ref: '#/components/parameters/SortOrder'
+      responses:
+        '200':
+          description: Lấy danh sách kết quả AI thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiResultsResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+
+  # ==========================================
+  # SECURITY
+  # ==========================================
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Nhập JWT access token
+
+  # ==========================================
+  # PARAMETERS
+  # ==========================================
+  parameters:
+
+    OrderId:
+      name: id
+      in: path
+      required: true
+      description: ID đơn hàng
+      schema:
+        type: integer
+        minimum: 1
+        example: 101
+
+    Page:
+      name: page
+      in: query
+      required: false
+      description: Trang hiện tại
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: Số bản ghi mỗi trang
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 10
+
+    OrderStatusFilter:
+      name: orderStatus
+      in: query
+      required: false
+      description: Lọc theo trạng thái đơn hàng
+      schema:
+        $ref: '#/components/schemas/OrderStatus'
+
+    CustomerIdFilter:
+      name: customerId
+      in: query
+      required: false
+      description: Lọc theo khách hàng
+      schema:
+        type: integer
+        minimum: 1
+
+    AiResultsTypeFilter:
+      name: AiResultsType
+      in: query
+      required: false
+      description: Lọc theo loại kết quả AI
+      schema:
+        $ref: '#/components/schemas/AiResultsType'
+
+    Search:
+      name: search
+      in: query
+      required: false
+      description: Tìm kiếm theo packageName
+      schema:
+        type: string
+        maxLength: 100
+
+    SortBy:
+      name: sortBy
+      in: query
+      required: false
+      description: Trường dùng để sắp xếp
+      schema:
+        type: string
+        enum:
+          - id
+          - amount
+          - paidAt
+          - createdAt
+        default: id
+
+    AiResultsSortBy:
+      name: AiResultsSortBy
+      in: query
+      required: false
+      description: Trường dùng để sắp xếp kết quả AI
+      schema:
+        type: string
+        enum:
+          - id
+          - createdAt
+        default: id
+
+    SortOrder:
+      name: order
+      in: query
+      required: false
+      description: Thứ tự sắp xếp
+      schema:
+        type: string
+        enum:
+          - asc
+          - desc
+        default: desc
+
+  # ==========================================
+  # SCHEMAS
+  # ==========================================
+  schemas:
+
+    # ---------- ENUMS ----------
+    OrderStatus:
+      type: string
+      enum:
+        - PENDING
+        - PAID
+        - FAILED
+        - REFUNDED
+    
+    AiResultsType:
+      type: string
+      enum:
+        - QUOTE
+        - WEBSITE
+    # ---------- REQUEST ----------
+    CreateOrderRequest:
+      type: object
+      required:
+        - customerId
+        - packageName
+        - amount
+      properties:
+        customerId:
+          type: integer
+          minimum: 1
+          example: 1
+        packageName:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: Basic
+        amount:
+          type: number
+          exclusiveMinimum: false
+          example: 500000
+
+    UpdateOrderStatusRequest:
+      type: object
+      required:
+        - newStatus
+      additionalProperties: false
+      properties:
+        newStatus:
+          $ref: '#/components/schemas/OrderStatus'
+        reason:
+          type: string
+          maxLength: 500
+          nullable: true
+          example: Payment confirmed
+
+    # ---------- ORDER ----------
+    Order:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 101
+        customerId:
+          type: integer
+          example: 1
+        packageName:
+          type: string
+          example: Basic
+        amount:
+          type: number
+          example: 500000
+        refund:
+          type: number
+          example: 0
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        paidAt:
+          type: string
+          format: date-time
+          nullable: true
+        refundedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    # ---------- HISTORY ----------
+    OrderStatusHistory:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        orderId:
+          type: integer
+          example: 101
+        previousStatus:
+          allOf:
+            - $ref: '#/components/schemas/OrderStatus'
+          nullable: true
+        newStatus:
+          $ref: '#/components/schemas/OrderStatus'
+        changedBy:
+          type: integer
+          example: 5
+        reason:
+          type: string
+          nullable: true
+          example: Payment confirmed
+        changedAt:
+          type: string
+          format: date-time
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 10
+        totalItems:
+          type: integer
+          example: 25
+        totalPages:
+          type: integer
+          example: 3
+    # ---------- AI RESULTS ----------
+    AiResults:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        customerId:
+          type: integer
+          example: 1
+        type:
+          $ref: '#/components/schemas/AiResultsType'
+        createdAt:
+          type: string
+          format: date-time
+    # ---------- SUCCESS RESPONSES ----------
+    OrderResponse:
+      type: object
+      required:
+        - status
+        - message
+        - data
+      properties:
+        status:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: success
+        data:
+          $ref: '#/components/schemas/Order'
+
+    OrderListResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Order'
+            pagination:
+              $ref: '#/components/schemas/Pagination'
+
+    AiResultsResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/AiResults'
+            pagination:
+              $ref: '#/components/schemas/Pagination'
+
+    OrderStatusUpdateResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: success
+        data:
+          $ref: '#/components/schemas/OrderStatusHistory'
+
+    OrderStatusHistoryListResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/OrderStatusHistory'
+            pagination:
+              $ref: '#/components/schemas/Pagination'
+
+    # ---------- ERROR ----------
+    ErrorResponse:
+      type: object
+      required:
+        - status
+        - message
+        - data
+      properties:
+        status:
+          type: integer
+          example: 400
+        message:
+          type: string
+          example: Validation failed
+        data:
+          nullable: true
+          oneOf:
+            - type: object
+            - type: string
+            - type: array
+              items: {}
+            - type: "null"
+
+  # ==========================================
+  # COMMON RESPONSES
+  # ==========================================
+  responses:
+
+    ValidationError:
+      description: Dữ liệu đầu vào không hợp lệ
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            status: 400
+            message: Validation failed
+            data:
+              amount: Amount must be greater than 0
+
+    Unauthorized:
+      description: Chưa xác thực hoặc JWT không hợp lệ
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            status: 401
+            message: Unauthorized
+            data: null
+
+    Forbidden:
+      description: Không có quyền thực hiện hành động
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            status: 403
+            message: Forbidden
+            data: null
+
+    InternalServerError:
+      description: Lỗi hệ thống
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            status: 500
+            message: Internal server error
+            data: null
