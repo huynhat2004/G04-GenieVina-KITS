@@ -1,41 +1,23 @@
-"""REST API thống kê (Thành viên C) – FastAPI, tự sinh Swagger tại /docs.
+"""REST API thống kê (Thành viên C) – dùng chung auth, DB và định dạng phản hồi của backend.
 
-Gắn vào app chính:
+Đăng ký trong app/main.py:
     from app.metrics_api import router as metrics_router
     app.include_router(metrics_router)
-
-Hai hàm get_db / require_member bên dưới là ĐIỂM NỐI với phần của thành viên D
-(JWT, phân quyền) và kết nối DB chung: thay bằng bản của nhóm hoặc dùng
-app.dependency_overrides[...]. Mọi vai trò (ADMIN/OPERATOR/VIEWER) đều được xem thống kê.
 """
 from __future__ import annotations
 
-import os
-from typing import Iterator
-
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
 
+from app.auth import Database, require_roles
 from app.metrics_service import (
     InvalidRangeError,
     MetricsService,
     PostgresMetricsRepository,
     parse_range,
 )
+from pydantic import BaseModel, Field
 
-
-# ----------------------------- điểm nối với nhóm ---------------------------- #
-def get_db() -> Iterator:
-    """Mở kết nối PostgreSQL (thay bằng hàm dùng chung của nhóm nếu có)."""
-    import psycopg
-
-    with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
-        yield conn
-
-
-def require_member():
-    """Thay bằng dependency JWT của thành viên D (cho phép ADMIN/OPERATOR/VIEWER)."""
-    raise HTTPException(status_code=401, detail="Chưa cấu hình xác thực JWT")
+from app.models import Envelope, ErrorEnvelope
 
 
 # ------------------------------ schema Swagger ------------------------------ #
@@ -86,28 +68,24 @@ class DailyData(BaseModel):
     items: list[DailyItem]
 
 
-class SummaryResponse(BaseModel):
-    status: int = 200
-    message: str = "success"
-    data: SummaryData
-
-
-class DailyResponse(BaseModel):
-    status: int = 200
-    message: str = "success"
-    data: DailyData
-
-
 # --------------------------------- endpoints -------------------------------- #
-router = APIRouter(prefix="/api/metrics", tags=["Thống kê"])
+router = APIRouter(
+    prefix="/api/metrics",
+    tags=["Metrics"],
+    dependencies=[Depends(require_roles("ADMIN", "OPERATOR", "VIEWER"))],
+    responses={
+        code: {"model": ErrorEnvelope, "description": text}
+        for code, text in {
+            400: "from/to thiếu, sai định dạng, from > to hoặc vượt 366 ngày",
+            401: "Thiếu hoặc sai JWT",
+            403: "Không đủ quyền",
+            503: "Database không khả dụng",
+        }.items()
+    },
+)
 
 FROM_Q = Query(..., alias="from", description="Ngày bắt đầu (YYYY-MM-DD), bao gồm", examples=["2026-10-26"])
 TO_Q = Query(..., description="Ngày kết thúc (YYYY-MM-DD), bao gồm", examples=["2026-11-24"])
-ERRORS = {
-    400: {"description": "from/to sai định dạng, from > to hoặc vượt 366 ngày"},
-    401: {"description": "Thiếu hoặc sai JWT"},
-    403: {"description": "Không đủ quyền"},
-}
 
 
 def _period(from_value: str, to_value: str):
@@ -119,30 +97,24 @@ def _period(from_value: str, to_value: str):
 
 @router.get(
     "/summary",
-    response_model=SummaryResponse,
-    responses=ERRORS,
-    summary="Tổng hợp chỉ số 1·2·3",
+    response_model=Envelope[SummaryData],
+    summary="Tổng hợp chỉ số 1·2·3 (mọi vai trò)",
     description="Khách trả phí (lần đầu / thanh toán lại), đăng ký mới + tăng trưởng "
     "so với kỳ trước cùng số ngày, doanh thu + trung bình ngày, hoàn tiền.",
 )
-def metrics_summary(
-    from_: str = FROM_Q, to: str = TO_Q, conn=Depends(get_db), _member=Depends(require_member)
-):
+def metrics_summary(connection: Database, from_: str = FROM_Q, to: str = TO_Q):
     period = _period(from_, to)
-    data = MetricsService(PostgresMetricsRepository(conn)).summary(period)
+    data = MetricsService(PostgresMetricsRepository(connection)).summary(period)
     return {"status": 200, "message": "success", "data": data}
 
 
 @router.get(
     "/daily",
-    response_model=DailyResponse,
-    responses=ERRORS,
-    summary="Doanh thu theo ngày (chỉ số 4)",
+    response_model=Envelope[DailyData],
+    summary="Doanh thu theo ngày – chỉ số 4 (mọi vai trò)",
     description="Doanh thu từng ngày trong kỳ (giờ Việt Nam), ngày không có dữ liệu ghi 0.",
 )
-def metrics_daily(
-    from_: str = FROM_Q, to: str = TO_Q, conn=Depends(get_db), _member=Depends(require_member)
-):
+def metrics_daily(connection: Database, from_: str = FROM_Q, to: str = TO_Q):
     period = _period(from_, to)
-    data = MetricsService(PostgresMetricsRepository(conn)).daily(period)
+    data = MetricsService(PostgresMetricsRepository(connection)).daily(period)
     return {"status": 200, "message": "success", "data": data}

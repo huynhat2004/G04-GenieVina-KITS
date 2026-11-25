@@ -207,37 +207,44 @@ class MetricsService:
 
 # --------------------------------------------------------------------------- #
 # Repository PostgreSQL (psycopg 3). Nhận connection đã mở sẵn.
+# Cursor luôn dùng dict_row nên chạy đúng với mọi row_factory của connection.
 # --------------------------------------------------------------------------- #
 class PostgresMetricsRepository:
     def __init__(self, connection):
         self.conn = connection
 
+    def _cursor(self):
+        from psycopg.rows import dict_row
+
+        return self.conn.cursor(row_factory=dict_row)
+
     def paid_orders(self, period: DateRange):
         sql = """SELECT customer_id, amount, paid_at FROM orders
                  WHERE status = 'PAID' AND paid_at >= %s AND paid_at < %s"""
-        with self.conn.cursor() as cur:
+        with self._cursor() as cur:
             cur.execute(sql, (period.start_at, period.end_at))
-            return [(r[0], r[1], r[2]) for r in cur.fetchall()]
+            return [(r["customer_id"], r["amount"], r["paid_at"]) for r in cur.fetchall()]
 
     def first_paid_times(self, customer_ids: list[int]):
-        sql = """SELECT customer_id, MIN(paid_at) FROM orders
+        sql = """SELECT customer_id, MIN(paid_at) AS first_paid_at FROM orders
                  WHERE status = 'PAID' AND customer_id = ANY(%s)
                  GROUP BY customer_id"""
-        with self.conn.cursor() as cur:
+        with self._cursor() as cur:
             cur.execute(sql, (customer_ids,))
-            return {r[0]: r[1] for r in cur.fetchall()}
+            return {r["customer_id"]: r["first_paid_at"] for r in cur.fetchall()}
 
     def signup_count(self, period: DateRange) -> int:
-        sql = "SELECT COUNT(*) FROM customers WHERE signed_up_at >= %s AND signed_up_at < %s"
-        with self.conn.cursor() as cur:
+        sql = """SELECT COUNT(*) AS total FROM customers
+                 WHERE signed_up_at >= %s AND signed_up_at < %s"""
+        with self._cursor() as cur:
             cur.execute(sql, (period.start_at, period.end_at))
-            return cur.fetchone()[0]
+            return cur.fetchone()["total"]
 
     def refunds(self, period: DateRange):
         # Theo refunded_at, KHÔNG lọc status PAID (đơn hoàn có status REFUNDED)
-        sql = """SELECT COUNT(*), COALESCE(SUM(amount), 0) FROM orders
+        sql = """SELECT COUNT(*) AS total, COALESCE(SUM(amount), 0) AS amount FROM orders
                  WHERE refunded_at >= %s AND refunded_at < %s"""
-        with self.conn.cursor() as cur:
+        with self._cursor() as cur:
             cur.execute(sql, (period.start_at, period.end_at))
-            count, amount = cur.fetchone()
-            return count, Decimal(amount)
+            row = cur.fetchone()
+            return row["total"], Decimal(row["amount"])

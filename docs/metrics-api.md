@@ -57,18 +57,22 @@ Trên Windows dùng `py` thay cho `python`. Lệnh này chạy cả `tests/test_
 
 ## Chạy API với PostgreSQL
 
-Nạp schema và seed như mục "Chạy dữ liệu mẫu" trong [README](../README.md), rồi:
+Router thống kê được đăng ký trong `app/main.py` cùng backend chung, dùng chung `DATABASE_URL`, JWT và định dạng phản hồi/lỗi. Chạy backend và lấy token thử theo hướng dẫn trong [README](../README.md) (mục "Chạy API khách hàng"), ví dụ:
 
 ```sh
-pip install fastapi uvicorn "psycopg[binary]"
-export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/genie_vina"
-uvicorn dev_main:app --reload
+python scripts/create_demo_token.py --member-id 3   # VIEWER cũng xem được thống kê
+uvicorn app.main:app --reload --env-file .env
 ```
 
-Trên PowerShell, đặt biến bằng `$env:DATABASE_URL = "..."`. `dev_main.py` là file chạy thử cục bộ (không commit), tạo `FastAPI()`, gắn `router` từ `app.metrics_api` và bỏ qua xác thực bằng `app.dependency_overrides[require_member] = lambda: None`. Mở http://127.0.0.1:8000/docs để thử.
+Mở http://127.0.0.1:8000/docs, bấm **Authorize**, dán token rồi thử `GET /api/metrics/summary` và `GET /api/metrics/daily`. Hoặc dùng curl:
 
-## Điểm nối với các phần khác
+```sh
+curl 'http://127.0.0.1:8000/api/metrics/summary?from=2026-10-26&to=2026-11-24' \
+  -H 'Authorization: Bearer YOUR_TOKEN'
+```
 
-- `require_member()` trong `app/metrics_api.py` là chỗ cắm dependency JWT của phần xác thực; cần cho phép cả ba vai trò.
-- `get_db()` mở kết nối bằng biến `DATABASE_URL`; thay bằng hàm kết nối dùng chung của nhóm nếu có.
-- Lỗi 400 hiện là `HTTPException`; phần xử lý ngoại lệ chung cần chuyển về định dạng `{ "status", "message", "data" }`.
+## Tích hợp với backend chung
+
+- Xác thực và phân quyền dùng `require_roles('ADMIN', 'OPERATOR', 'VIEWER')` từ `app/auth.py`; kết nối DB lấy từ `Database` (`app/db.py`).
+- Phản hồi dùng `Envelope` trong `app/models.py`; lỗi 400/401/403/503 đi qua các exception handler trong `app/main.py`.
+- `PostgresMetricsRepository` tự dùng cursor `dict_row` nên không phụ thuộc `row_factory` của connection.
