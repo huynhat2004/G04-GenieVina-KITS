@@ -1,6 +1,6 @@
 # Kịch bản thuyết trình và demo
 
-File chỉnh sửa được: [Genie-Vina.pptx](Genie-Vina.pptx), 13 slide có speaker notes. Sinh lại bằng `python scripts/build_presentation.py` sau khi cài `requirements-tools.txt`.
+File chỉnh sửa được: [Genie-Vina.pptx](Genie-Vina.pptx), 13 slide bằng tiếng Anh, gồm cả speaker notes. Sinh lại bằng `python scripts/build_presentation.py` sau khi cài `requirements-tools.txt`.
 
 ## Phân bổ 10–12 phút
 

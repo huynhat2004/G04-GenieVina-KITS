@@ -1,4 +1,4 @@
-"""Generate the editable Vietnamese presentation delivered with the assignment."""
+"""Generate the editable English presentation delivered with the assignment."""
 from pathlib import Path
 
 from pptx import Presentation
@@ -9,88 +9,88 @@ from pptx.util import Inches, Pt
 ROOT = Path(__file__).resolve().parents[1]
 NAVY, INK, BLUE, LIGHT, WHITE = '203864','172B4D','176B87','EFF4FA','FFFFFF'
 slides = [
-('GENIE VINA', 'API chỉ số vận hành dịch vụ', [
+('GENIE VINA', 'Service Operations Metrics API', [
     'Connext GNOM · Estimator / Studio',
-    'REST API · PostgreSQL · JWT · Kiểm thử',
-    'Nhóm G04 — KITS 2026'],
-    'Mở đầu: dữ liệu đăng ký, thanh toán, hoàn tiền đang phân tán. Hệ thống tập trung dữ liệu và đưa ra định nghĩa chỉ số rõ ràng.'),
-('01 / BÀI TOÁN', 'Từ dữ liệu rời rạc đến chỉ số nhất quán', [
-    'Quản lý khách hàng, đơn hàng và từng lần dùng AI.',
-    'Theo dõi chuyển trạng thái: ai đổi, khi nào, vì sao.',
-    'Báo cáo khách trả phí, đăng ký, doanh thu và hoàn tiền.',
-    'Đầu ra: 16 thao tác HTTP, Swagger, test, tài liệu và PPT.'],
-    'Phạm vi là quản lý bản ghi nghiệp vụ. QUOTE là một báo giá, WEBSITE là một website; không cần tích hợp mô hình AI hoặc cổng thanh toán.'),
-('02 / KIẾN TRÚC', 'Một luồng request, một transaction', [
-    'Client / Swagger → FastAPI → xác thực JWT → kiểm tra quyền.',
-    'Pydantic kiểm tra request; SQL dùng tham số hóa.',
-    'PostgreSQL kiểm tra unique, FK, ngày và trạng thái.',
-    'Commit trước response; có lỗi thì rollback toàn bộ.'],
-    'Giải thích dependency scope=function: transaction hoàn tất trước khi trả thành công. API và database cùng bảo vệ nghiệp vụ; database vẫn an toàn khi có ghi đồng thời.'),
-('03 / DỮ LIỆU', 'ERD: 5 bảng nghiệp vụ', [],
-    'Mỗi bảng con thuộc một cha; quan hệ 1:N. customer_code unique, email unique không phân biệt hoa/thường. FK RESTRICT bảo toàn dữ liệu. Bảng kỹ thuật revoked_tokens có token_hash PK và expires_at; không nằm trong 5 bảng nghiệp vụ.'),
-('04 / QUYẾT ĐỊNH', 'Thiết kế để kiểm soát tính đúng', [
-    'NUMERIC(18,2) và Decimal: tránh sai số tiền.',
-    'TIMESTAMPTZ; ngày báo cáo theo Asia/Ho_Chi_Minh.',
-    'FK RESTRICT: từ chối xóa khách có đơn hoặc AI.',
-    'created_at bổ sung để kiểm tra sự kiện sau đăng ký.',
-    'Mật khẩu PBKDF2; JWT đã logout lưu bằng SHA-256.'],
-    'Hoàn tiền toàn bộ amount, giữ paid_at và thêm refunded_at. Không lưu password thô hay token thô. Tiền API trả chuỗi thập phân để giữ chính xác.'),
-('05 / API', '16 thao tác, chung một hợp đồng', [
-    'Xác thực: login / logout — 2 thao tác.',
-    'Khách hàng: tạo, danh sách, chi tiết, sửa, xóa — 5.',
-    'Đơn hàng + trạng thái + lịch sử — 5.',
-    'Kết quả AI: ghi nhận / tra cứu — 2.',
-    'Thống kê: summary / daily — 2.'],
-    'Mở Swagger để xem model request/response, Bearer auth và lỗi. Response luôn có status, message, data. OpenAPI được xuất trực tiếp từ runtime, tránh hợp đồng lệch code.'),
-('06 / PHÂN QUYỀN', 'Quyền được đọc từ database mỗi request', [
-    'ADMIN: toàn bộ chức năng, gồm xóa khách.',
-    'OPERATOR: nhập/sửa dữ liệu, đổi trạng thái đơn.',
-    'VIEWER: chỉ đọc và xem thống kê.',
-    'JWT HS256, thời hạn 30 phút; logout thu hồi bền vững.',
-    'Role client tự khai không thay đổi quyền thực tế.'],
-    'Demo VIEWER POST bị 403. Demo logout rồi dùng lại token nhận 401. Role từ database có hiệu lực ngay, không chờ token hết hạn.'),
-('07 / TRẠNG THÁI', 'Chuyển trạng thái có kiểm soát', [
-    'PENDING → PAID hoặc FAILED; PAID → REFUNDED.',
-    'Không cho quay lại trạng thái cũ hay chuyển tùy ý.',
-    'Lý do bắt buộc; người đổi lấy từ JWT.',
-    'Khóa hàng FOR UPDATE bảo vệ thanh toán đồng thời.',
-    'Trigger ghi lịch sử cùng transaction cập nhật đơn.'],
-    'Hai request thanh toán cùng lúc: một thành công, một bị từ chối vì trạng thái đã PAID. Chỉ một dòng lịch sử. Nếu trigger thất bại, thay đổi trạng thái cũng rollback.'),
-('08 / CHỈ SỐ 1–2', 'Đếm khách đúng, so sánh đúng kỳ', [
-    'Khách trả phí: distinct khách có đơn hiện PAID trong kỳ.',
-    'Lần đầu: MIN(paidAt) trên toàn bộ đơn hiện PAID.',
-    'Mua lại = tổng khách trả phí − khách lần đầu.',
-    'Đăng ký mới: signedUpAt trong khoảng báo cáo.',
-    'Tăng trưởng so kỳ trước cùng số ngày; trước = 0 → null.'],
-    'Một khách có nhiều đơn trong kỳ chỉ đếm một lần. Khách lần đầu mua hai lần trong cùng kỳ vẫn thuộc nhóm lần đầu, không thuộc cả hai nhóm. Tra lịch sử trước kỳ là bắt buộc.'),
-('09 / CHỈ SỐ 3–4', 'Doanh thu, hoàn tiền và ngày không giao dịch', [
-    'Doanh thu: SUM(amount), chỉ đơn hiện PAID theo paidAt.',
-    'Trung bình ngày = doanh thu / toàn bộ số ngày trong kỳ.',
-    'Hoàn tiền: tổng amount và số đơn theo refundedAt.',
-    'Daily tạo đủ từng ngày; không giao dịch trả 0.',
-    'Khoảng [from 00:00, ngày sau to 00:00), UTC+07.'],
-    'Không tự trừ hoàn tiền khỏi doanh thu. Vì đơn hợp lệ phải đang PAID, hoàn tiền có thể làm thay đổi doanh thu của kỳ thanh toán cũ. Đây là hệ quả trực tiếp từ định nghĩa của đề.'),
-('10 / KIỂM CHỨNG', 'Test các trường hợp dễ tính sai', [
-    'Unit: distinct, mua lại, kỳ trước, chia 0, số thập phân.',
-    'Biên ngày UTC+07, ngày trống, hoàn tiền ngoài kỳ.',
-    'HTTP trên PostgreSQL: CRUD, role, JWT, logout.',
-    'Đổi trạng thái đồng thời và lịch sử tự động.',
-    'Seed tái lập: 60 khách, 30 ngày, dữ liệu tổng hợp.'],
-    'Chạy lệnh trong README để có số test mới nhất. Schema kiểm thử ngẫu nhiên, tự xóa khi xong; không dùng database nghiệp vụ. Không có TEST_DATABASE_URL thì HTTP tests bị skip, không tính là đã kiểm chứng.'),
-('11 / DEMO', 'Một kịch bản nối dữ liệu với báo cáo', [
-    'Login ADMIN → tạo khách → tạo đơn PENDING.',
-    'Đổi PAID → xem lịch sử → xem summary/daily.',
-    'Đổi REFUNDED → đối chiếu doanh thu và hoàn tiền.',
-    'Login VIEWER → thử ghi dữ liệu bị 403.',
-    'Logout → dùng lại token bị 401.'],
-    'Dùng from=2026-10-26 và to=2026-11-24 để xem seed; dùng ngày hiện tại Việt Nam để xem đơn demo mới. Không cần giả mạo thời điểm payment vì server tự ghi thời điểm thật.'),
-('12 / BÀN GIAO', 'Code, bằng chứng và review của nhóm', [
-    'A: ERD/seed/khách; B: đơn/AI; C: thống kê/test.',
-    'D: xác thực/Swagger; E: Git/tài liệu/thuyết trình.',
-    'Nhánh feature riêng; PR có mô tả và lệnh kiểm chứng.',
-    'Review độc lập trước merge; không push trực tiếp main.',
-    'GitHub + OpenAPI + hướng dẫn demo + PPT chỉnh sửa được.'],
-    'Nhóm điền tên thành viên thật, thực hiện review và nộp link theo quy định lớp. Không giả lịch sử làm việc hoặc reviewer. Nêu hướng mở rộng: SQL aggregation cho dữ liệu lớn, rate limiting, vận hành production nếu có yêu cầu tiếp theo.'),
+    'REST API · PostgreSQL · JWT · Automated Testing',
+    'Team G04 — KITS 2026'],
+    'Registration, payment, and refund data is scattered across administration tools. This project centralizes operational records and defines consistent business metrics.'),
+('01 / THE CHALLENGE', 'From scattered data to consistent metrics', [
+    'Manage customers, orders, and individual AI usage events.',
+    'Track status changes: who changed what, when, and why.',
+    'Report paying customers, registrations, revenue, and refunds.',
+    'Deliver 16 HTTP operations, Swagger, tests, docs, and slides.'],
+    'The scope is operational record management. QUOTE represents one software estimate; WEBSITE represents one generated website. Integrating an AI model or payment gateway is outside the assignment scope.'),
+('02 / ARCHITECTURE', 'One request, one transaction', [
+    'Client / Swagger → FastAPI → JWT validation → permissions.',
+    'Pydantic validates requests; SQL values are parameterized.',
+    'PostgreSQL enforces uniqueness, foreign keys, dates, and states.',
+    'Commit before responding; roll back the entire operation on error.'],
+    'The database dependency uses scope=function so the transaction finishes before a successful response is sent. Both the API and the database enforce business rules, including during concurrent writes.'),
+('03 / DATA MODEL', 'ERD: five business entities', [],
+    'Each child record belongs to one parent, with one-to-many relationships. customer_code is unique; member email is unique regardless of case. Foreign keys use RESTRICT to preserve related records. The additional technical table revoked_tokens has token_hash as its primary key and expires_at; it is separate from the five business entities.'),
+('04 / DESIGN DECISIONS', 'Designing for correctness', [
+    'NUMERIC(18,2) and Decimal preserve monetary precision.',
+    'TIMESTAMPTZ; reporting days use Asia/Ho_Chi_Minh.',
+    'FK RESTRICT blocks deleting customers with orders or AI events.',
+    'created_at ensures events do not precede customer registration.',
+    'PBKDF2 password hashes; SHA-256 hashes for revoked JWTs.'],
+    'Refunds cover the full order amount. The system preserves paid_at and sets refunded_at. Neither plaintext passwords nor raw revoked tokens are stored. Monetary values are returned as decimal strings to preserve precision.'),
+('05 / REST API', '16 operations, one response contract', [
+    'Authentication: login / logout — 2 operations.',
+    'Customers: create, list, detail, update, delete — 5.',
+    'Orders, status updates, and status history — 5.',
+    'AI results: record / query — 2.',
+    'Metrics: summary / daily — 2.'],
+    'Swagger documents request and response models, Bearer authentication, and errors. Every response contains status, message, and data. OpenAPI is generated from the running application models to keep the contract consistent with the code.'),
+('06 / ACCESS CONTROL', 'Check current permissions on every request', [
+    'ADMIN: all operations, including customer deletion.',
+    'OPERATOR: create and update records; change order status.',
+    'VIEWER: read records and view metrics only.',
+    'HS256 JWTs expire after 30 minutes; logout revokes the token.',
+    'Client-supplied role claims do not grant permissions.'],
+    'Demonstrate a VIEWER write request returning 403. Log out and reuse the same token to receive 401. Roles are loaded from the database on every request, so role changes take effect without waiting for token expiry. Revocation persists across application restarts.'),
+('07 / ORDER LIFECYCLE', 'Controlled transitions with an audit trail', [
+    'PENDING → PAID or FAILED; PAID → REFUNDED.',
+    'Reject reverse transitions and all unsupported state changes.',
+    'A reason is required; the actor is identified through the JWT.',
+    'FOR UPDATE row locks serialize concurrent payment requests.',
+    'A trigger records history within the order update transaction.'],
+    'If two requests attempt to pay the same order, one succeeds and the other is rejected after observing the updated PAID status. Only one history entry is created. If the history trigger fails, the order status update is rolled back as well.'),
+('08 / METRICS 1–2', 'Count customers and compare equal periods', [
+    'Paying customers: distinct customers with PAID orders in range.',
+    'First-time: earliest paidAt across all currently PAID orders.',
+    'Returning customers = paying customers − first-time customers.',
+    'New registrations: signedUpAt within the reporting period.',
+    'Growth uses an equal-length prior period; prior = 0 → null.'],
+    'Count each paying customer once even if they place several orders. A customer whose first valid payment falls in the reporting period remains first-time even if they pay twice in that period. The first payment must be determined using all prior history, not just the requested period.'),
+('09 / METRICS 3–4', 'Revenue, refunds, and days without sales', [
+    'Revenue: SUM(amount) for currently PAID orders, by paidAt.',
+    'Average daily revenue = revenue / all days in the period.',
+    'Refunds: total amount and order count, by refundedAt.',
+    'Daily revenue includes every date; days without sales return 0.',
+    'Range: [from 00:00, day after to 00:00), UTC+07.'],
+    'Do not subtract refunds from the defined revenue metric. Because a valid order must currently be PAID, refunding an order can change the report for its original payment period. This follows the assignment definition. Both from and to are included as local calendar days.'),
+('10 / VERIFICATION', 'Test the cases that are easy to miscount', [
+    'Unit tests: distinct counts, repeat buyers, growth, and decimals.',
+    'UTC+07 boundaries, empty days, and refunds outside the period.',
+    'HTTP tests on PostgreSQL: CRUD, roles, JWTs, and logout.',
+    'Concurrent status updates and automatic history recording.',
+    'Reproducible seed: 60 customers, 30 days, synthetic identities.'],
+    'Run the README commands for the latest test count. Integration tests use randomly named schemas and clean them up afterwards, without modifying business tables in the default schema. Without TEST_DATABASE_URL, HTTP tests are skipped and must not be reported as verified.'),
+('11 / LIVE DEMO', 'Connect operational events to the reports', [
+    'Log in as ADMIN → create a customer → create a PENDING order.',
+    'Mark it PAID → inspect history → view summary and daily metrics.',
+    'Mark it REFUNDED → compare revenue and refund figures.',
+    'Log in as VIEWER → attempt a write and receive 403.',
+    'Log out → reuse the token and receive 401.'],
+    'Use from=2026-10-26 and to=2026-11-24 for the default seed dataset. Use the current date in Vietnam for newly created demo payments. The server records the real payment timestamp, so new payments do not appear in the old seed period.'),
+('12 / HANDOVER', 'Code, evidence, and team review', [
+    'A: ERD / seed / customers; B: orders / AI; C: metrics / tests.',
+    'D: authentication / Swagger; E: Git / docs / presentation.',
+    'Use feature branches and PRs with clear validation steps.',
+    'Require independent review before merging into main.',
+    'Deliver GitHub, OpenAPI, a demo guide, and editable slides.'],
+    'The team must enter real member names, complete an independent review, and submit the required links. Do not invent contribution history or reviewers. Possible extensions include SQL aggregation for larger datasets, login rate limiting, and production operations if the scope expands.'),
 ]
 
 
@@ -117,7 +117,7 @@ def text(slide,x,y,w,h,value,size,color=INK,bold=False):
 
 
 def main():
-    prs=Presentation();prs.slide_width=Inches(13.333);prs.slide_height=Inches(7.5)
+    prs=Presentation();prs.core_properties.language='en-US';prs.slide_width=Inches(13.333);prs.slide_height=Inches(7.5)
     for i,(label,title,items,notes) in enumerate(slides):
         slide=prs.slides.add_slide(prs.slide_layouts[6])
         slide.background.fill.solid();slide.background.fill.fore_color.rgb=RGBColor.from_string(WHITE)
