@@ -1,6 +1,6 @@
 # Phần A – API khách hàng
 
-Phạm vi: ERD, script dữ liệu giả và CRUD khách hàng. Không triển khai API đơn hàng, thống kê hoặc đăng nhập của các thành viên khác.
+Phạm vi: ERD, script dữ liệu giả và CRUD khách hàng. Tài liệu này mô tả riêng phần khách hàng; các phần còn lại đã được tích hợp trong [API toàn hệ thống](api.md).
 
 ## Hợp đồng API
 
@@ -40,9 +40,9 @@ Danh sách có `page` (mặc định 1), `size` (mặc định 20, tối đa 100
 
 ## Bàn giao cho thành viên D
 
-Các endpoint khách hàng phải tích hợp JWT thật. Không lấy vai trò từ header tự khai báo. Token dùng `sub` là ID của `members` dạng chuỗi và có `exp`; backend đọc vai trò hiện tại từ database để tránh dùng quyền cũ trong token. Thành viên D chịu trách nhiệm đăng nhập, phát hành/thu hồi token và thay dependency xác thực khi tích hợp cơ chế JWT chung.
+Các endpoint khách hàng phải tích hợp JWT thật. Không lấy vai trò từ header tự khai báo. Token dùng `sub` là ID của `members` dạng chuỗi và có `exp`; backend đọc vai trò hiện tại từ database để tránh dùng quyền cũ trong token. Module `app/sessions.py` cung cấp đăng nhập và thu hồi token; `get_principal` là dependency xác thực chung.
 
-Triển khai hiện tại dùng HS256 với `JWT_SECRET` tối thiểu 32 byte, cố định thuật toán khi verify. Đăng nhập/logout và kiểm tra danh sách token đã thu hồi chưa thuộc phần A. `scripts/create_demo_token.py` là công cụ local để thử seed, không được gắn thành endpoint.
+Triển khai hiện tại dùng HS256 với `JWT_SECRET` tối thiểu 32 byte, cố định thuật toán khi verify. Đăng nhập/logout và kiểm tra token đã thu hồi đã được tích hợp; bảng `revoked_tokens` lưu SHA-256 token đến khi hết hạn. `scripts/create_demo_token.py` là công cụ local để thử seed, không được gắn thành endpoint.
 
 ## Transaction và tích hợp database
 

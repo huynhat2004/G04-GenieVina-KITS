@@ -1,5 +1,7 @@
 from typing import Annotated
 
+import hashlib
+
 import jwt
 import psycopg
 from fastapi import Depends, HTTPException
@@ -31,7 +33,9 @@ def get_principal(
             raise unauthorized
     except (jwt.InvalidTokenError, ValueError):
         raise unauthorized from None
-    member = connection.execute('SELECT id, role FROM members WHERE id = %s', (member_id,)).fetchone()
+    member = connection.execute('''SELECT id, role FROM members WHERE id = %s AND NOT EXISTS
+        (SELECT 1 FROM revoked_tokens WHERE token_hash = %s AND expires_at > CURRENT_TIMESTAMP)''',
+        (member_id, hashlib.sha256(credentials.credentials.encode()).hexdigest())).fetchone()
     if member is None:
         raise unauthorized
     return Principal(**member)

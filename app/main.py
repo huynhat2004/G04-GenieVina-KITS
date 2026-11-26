@@ -9,6 +9,9 @@ from starlette.exceptions import HTTPException
 
 from app.config import get_settings
 from app.customers import router
+from app.operations import router as operations_router
+from app.sessions import router as sessions_router
+from app.metrics import router as metrics_router
 
 logger = logging.getLogger(__name__)
 
@@ -19,9 +22,12 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title='Genie Vina – Customer API', version='1.0.0', lifespan=lifespan,
-              description='Phần A: CRUD khách hàng. Bearer JWT; ADMIN / OPERATOR / VIEWER.')
+app = FastAPI(title='Genie Vina – Operational API', version='1.0.0', lifespan=lifespan,
+              description='REST API vận hành Connext GNOM. Tiền VND; thống kê ngày theo Asia/Ho_Chi_Minh. ADMIN: toàn quyền; OPERATOR: nhập/sửa; VIEWER: đọc và thống kê.')
 app.include_router(router)
+app.include_router(operations_router)
+app.include_router(sessions_router)
+app.include_router(metrics_router)
 
 
 def error(status, message, data=None, headers=None):
@@ -43,11 +49,11 @@ async def validation_error(request: Request, exc: RequestValidationError):
 @app.exception_handler(psycopg.Error)
 async def database_error(request: Request, exc: psycopg.Error):
     if isinstance(exc, psycopg.errors.UniqueViolation):
-        return error(409, 'Customer code already exists')
+        return error(409, 'Unique value already exists')
     if isinstance(exc, psycopg.errors.ForeignKeyViolation):
         return error(409, 'Customer has related orders or AI results and cannot be deleted')
     if isinstance(exc, psycopg.errors.CheckViolation):
-        return error(409, 'Customer signup date conflicts with existing events')
+        return error(409, 'Data violates business constraints')
     if isinstance(exc, (psycopg.OperationalError, psycopg.InterfaceError)):
         logger.error('Database unavailable: %s', type(exc).__name__)
         return error(503, 'Database unavailable')
@@ -68,7 +74,7 @@ original_openapi = app.openapi
 def customer_openapi():
     schema = original_openapi()
     for path, operations in schema['paths'].items():
-        if path.startswith('/api/customers'):
+        if path.startswith('/api/'):
             for operation in operations.values():
                 if isinstance(operation, dict):
                     operation.get('responses', {}).pop('422', None)

@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock
 
+import hashlib
+
 import jwt
 import pytest
 from fastapi import HTTPException
@@ -35,11 +37,12 @@ def assert_unauthorized(credential, connection):
 
 
 def test_valid_token_loads_current_member_and_uses_parameterized_query(connection):
-    result = get_principal(credentials(), connection)
+    credential = credentials()
+    result = get_principal(credential, connection)
     assert result == Principal(id=2, role='OPERATOR')
     query, parameters = connection.execute.call_args.args
     assert '%s' in query
-    assert parameters == (2,)
+    assert parameters == (2, hashlib.sha256(credential.credentials.encode()).hexdigest())
 
 
 def test_role_claim_does_not_override_database_permissions(connection):
